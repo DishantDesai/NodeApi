@@ -1,4 +1,7 @@
+const { v4: uuidv4 } = require("uuid");
 const HttpError = require("../models/http-error");
+const getCoordForAddress = require("../utils/location");
+const Place = require("../models/place");
 
 const DUMMY_PLACES = [
   {
@@ -40,16 +43,32 @@ const getPlacesByUserId = (req, res, next) => {
   });
 };
 
-const createPlace = (req, res, next) => {
-  const { title, description, coordinates, address, creator } = req.body;
-  const createdPlace = {
+const createPlace = async (req, res, next) => {
+  const { title, description, address, creator } = req.body;
+
+  let coordinates;
+  try {
+    coordinates = await getCoordForAddress(address);
+  } catch (err) {
+    return next(err);
+  }
+
+  const createdPlace = new Place({
     title,
     description,
     location: coordinates,
     address,
+    image: "https://picsum.photos/id/237/200/300",
     creator,
-  };
-  DUMMY_PLACES.push(createPlace);
+  });
+
+  try {
+    await createdPlace.save();
+  } catch (error) {
+    console.log(error);
+    return next(new HttpError("Creating place failed,please try again."));
+  }
+
   res.status(201).json({ place: createdPlace });
 };
 
@@ -66,6 +85,9 @@ const updatePlace = (req, res, next) => {
 };
 const deletePlace = (req, res, next) => {
   const placeId = req.params.pid;
+  if (DUMMY_PLACES.find((p) => p.id === placeId)) {
+    next(new HttpError("Could not find place with that id", 404));
+  }
   const placeIndex = DUMMY_PLACES.findIndex((p) => p.id === placeId);
   const deletedPlace = DUMMY_PLACES.splice(placeIndex, 1);
   res.status(200).json({ place: deletedPlace });
